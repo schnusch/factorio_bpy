@@ -1,7 +1,7 @@
 import pprint
 import unittest
 
-from factorio_bpy.logic import Comparison
+from factorio_bpy.logic import Comparison, Falsum, Verum
 from factorio_bpy.types import Signal
 
 A = Comparison(Signal(name="signal-A", type="virtual"), "=", 0)
@@ -20,6 +20,69 @@ class TestLogic(unittest.TestCase):
             "\n" + pprint.pformat(a) + "\nvs.\n" + pprint.pformat(b),
         )
         self.assertEqual(a.to_list(), b.to_list())
+
+    def test_verum(self) -> None:
+        """A | ~A"""
+        self.assertIsInstance(
+            A | ~A,
+            Verum,
+        )
+
+    def test_verum_and(self) -> None:
+        """(A | ~A) & B is B"""
+        self.assertIs(
+            (A | ~A) & B,
+            B,
+        )
+        self.assertIs(
+            B & (A | ~A),
+            B,
+        )
+
+    def test_verum_or(self) -> None:
+        """(A | ~A) | B == ⊤"""
+        self.assertIsInstance(
+            (A | ~A) | B,
+            Verum,
+        )
+        self.assertIsInstance(
+            B | (A | ~A),
+            Verum,
+        )
+
+    def test_falsum(self) -> None:
+        """A & ~A"""
+        self.assertIsInstance(
+            A & ~A,
+            Falsum,
+        )
+
+    def test_falsum_and(self) -> None:
+        """(A & ~A) & B == ⊥"""
+        self.assertIsInstance(
+            (A & ~A) & B,
+            Falsum,
+        )
+        self.assertIsInstance(
+            B & (A & ~A),
+            Falsum,
+        )
+
+    def test_falsum_or(self) -> None:
+        """(A & ~A) | B is B"""
+        self.assertIs(
+            (A & ~A) | B,
+            B,
+        )
+        self.assertIs(
+            B | (A & ~A),
+            B,
+        )
+
+    def test_eq(self) -> None:
+        """A == ~~A"""
+        self.assertEqual(A, ~~A)
+        self.assertNotEqual(A, B)
 
     def test_invert(self) -> None:
         """~A"""
