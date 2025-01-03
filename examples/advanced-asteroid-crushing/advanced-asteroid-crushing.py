@@ -1,31 +1,27 @@
 #!/usr/bin/env python3
 import pprint
-from typing import Dict, List
+from typing import Dict
 
-from factorio_bpy import bp_dump, add_wire, hstack, WireConnectorID
-from factorio_bpy.logic import Comparison
-from factorio_bpy.table import DeciderTable, html_pre, json_dumps, md_pre
-from factorio_bpy.types import DeciderOutput, Signal
+from factorio_bpy import add_wire, bp_dump, hstack, Signal, WireConnectorID
+from factorio_bpy.table import DeciderTable, html_pre, md_pre
+from factorio_bpy.types import DeciderOutput
 
 
-have = {}  # type: Dict[str, Condition]
-have["iron-ore"] = Comparison(Signal(name="iron-ore"), "≥", 200)
-have["carbon"] = Comparison(Signal(name="carbon"), "≥", 50)
-have["ice"] = Comparison(Signal(name="ice"), "≥", 100)
-have["calcite"] = Comparison(Signal(name="calcite"), "≥", 50)
+have = {}  # type: Dict[str, Signal]
+have["iron-ore"] = Signal("iron-ore") >= 200
+have["carbon"] = Signal("carbon") >= 50
+have["ice"] = Signal("ice") >= 100
+have["calcite"] = Signal("calcite") >= 50
 
-have["metallic-asteroid-chunk"] = Comparison(Signal(name="metallic-asteroid-chunk"), ">", 0)
-have["carbonic-asteroid-chunk"] = Comparison(Signal(name="carbonic-asteroid-chunk"), ">", 0)
-have["oxide-asteroid-chunk"] = Comparison(Signal(name="oxide-asteroid-chunk"), ">", 0)
+have["metallic-asteroid-chunk"] = Signal("metallic-asteroid-chunk") > 0
+have["carbonic-asteroid-chunk"] = Signal("carbonic-asteroid-chunk") > 0
+have["oxide-asteroid-chunk"] = Signal("oxide-asteroid-chunk") > 0
 
 
 def recipe(name: str) -> DeciderOutput:
     return DeciderOutput(
         copy_count_from_input=False,
-        signal=Signal(
-            name=name,
-            type="recipe",
-        ),
+        signal=Signal(name, type="recipe"),
     )
 
 

@@ -1,30 +1,27 @@
+import json
 import pprint
 import unittest
 
-from factorio_bpy.logic import Comparison
-from factorio_bpy.types import Signal
+from factorio_bpy import Signal, json_dumps
+from sympy.core.relational import Rel
 
-A = Comparison(Signal(name="signal-A", type="virtual"), "=", 0)
-B = Comparison(Signal(name="signal-B", type="virtual"), "=", 0)
-C = Comparison(Signal(name="signal-C", type="virtual"), "=", 0)
-D = Comparison(Signal(name="signal-D", type="virtual"), "=", 0)
+A = Rel(Signal("signal-A", type="virtual"), 0, "==")
+B = Rel(Signal("signal-B", type="virtual"), 0, "==")
+C = Rel(Signal("signal-C", type="virtual"), 0, "==")
+D = Rel(Signal("signal-D", type="virtual"), 0, "==")
+
+
+def unjson(x):
+    return json.loads(json_dumps(x))
 
 
 class TestLogic(unittest.TestCase):
     maxDiff = None
 
-    def assertToList(self, a, b):
-        self.assertEqual(
-            a.to_list(),
-            b.to_list(),
-            "\n" + pprint.pformat(a) + "\nvs.\n" + pprint.pformat(b),
-        )
-        self.assertEqual(a.to_list(), b.to_list())
-
     def test_invert(self) -> None:
         """~A"""
         self.assertEqual(
-            (~A).to_list(),
+            unjson(~A),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -37,7 +34,7 @@ class TestLogic(unittest.TestCase):
     def test_or(self) -> None:
         """A | B"""
         self.assertEqual(
-            (A | B).to_list(),
+            unjson(A | B),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -53,14 +50,14 @@ class TestLogic(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            (A | B).to_list(),
-            A.to_list() + B.to_list(),
+            unjson(A | B),
+            unjson(A) + unjson(B),
         )
 
     def test_and(self) -> None:
         """A & B"""
         self.assertEqual(
-            (A & B).to_list(),
+            unjson(A & B),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -78,12 +75,12 @@ class TestLogic(unittest.TestCase):
 
     def test_invert_or(self) -> None:
         """~(A | B) == ~A & ~B"""
-        self.assertToList(
-            ~(A | B),
-            ~A & ~B,
+        self.assertEqual(
+            unjson(~(A | B)),
+            unjson(~A & ~B),
         )
         self.assertEqual(
-            (~(A | B)).to_list(),
+            unjson(~(A | B)),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -101,12 +98,12 @@ class TestLogic(unittest.TestCase):
 
     def test_invert_and(self) -> None:
         """~(A & B) == ~A | ~B"""
-        self.assertToList(
-            ~(A & B),
-            ~A | ~B,
+        self.assertEqual(
+            unjson(~(A & B)),
+            unjson(~A | ~B),
         )
         self.assertEqual(
-            (~(A & B)).to_list(),
+            unjson(~(A & B)),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -122,14 +119,14 @@ class TestLogic(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            (~(A & B)).to_list(),
-            (~A).to_list() + (~B).to_list(),
+            unjson(~(A & B)),
+            unjson(~A) + unjson(~B),
         )
 
     def test_OR_and(self) -> None:
         """A | (B & C)"""
         self.assertEqual(
-            (A | (B & C)).to_list(),
+            unjson(A | (B & C)),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -154,8 +151,14 @@ class TestLogic(unittest.TestCase):
     def test_and_OR(self) -> None:
         """(A & B) | C"""
         self.assertEqual(
-            ((A & B) | C).to_list(),
+            unjson((A & B) | C),
             [
+                {
+                    "first_signal": {"name": "signal-C", "type": "virtual"},
+                    "comparator": "=",
+                    "constant": 0,
+                },
+                # OR
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
                     "comparator": "=",
@@ -167,23 +170,17 @@ class TestLogic(unittest.TestCase):
                     "comparator": "=",
                     "constant": 0,
                 },
-                # OR
-                {
-                    "first_signal": {"name": "signal-C", "type": "virtual"},
-                    "comparator": "=",
-                    "constant": 0,
-                },
             ],
         )
 
     def test_AND_or(self) -> None:
         """A & (B | C) = (A & B) | (A & C)"""
-        self.assertToList(
-            A & (B | C),
-            (A & B) | (A & C),
+        self.assertEqual(
+            unjson(A & (B | C)),
+            unjson((A & B) | (A & C)),
         )
         self.assertEqual(
-            (A & (B | C)).to_list(),
+            unjson(A & (B | C)),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -213,12 +210,12 @@ class TestLogic(unittest.TestCase):
 
     def test_or_AND(self) -> None:
         """(A | B) & C = (A & C) | (B & C)"""
-        self.assertToList(
-            (A | B) & C,
-            (A & C) | (B & C),
+        self.assertEqual(
+            unjson((A | B) & C),
+            unjson((A & C) | (B & C)),
         )
         self.assertEqual(
-            ((A | B) & C).to_list(),
+            unjson((A | B) & C),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -248,12 +245,12 @@ class TestLogic(unittest.TestCase):
 
     def test_or_AND_or(self) -> None:
         """(A | B) & (C | D) = (A & C) | (A & D) | (B & C) | (B & D)"""
-        self.assertToList(
-            (A | B) & (C | D),
-            (A & C) | (A & D) | (B & C) | (B & D),
+        self.assertEqual(
+            unjson((A | B) & (C | D)),
+            unjson((A & C) | (A & D) | (B & C) | (B & D)),
         )
         self.assertEqual(
-            ((A | B) & (C | D)).to_list(),
+            unjson((A | B) & (C | D)),
             [
                 {
                     "first_signal": {"name": "signal-A", "type": "virtual"},
@@ -306,29 +303,7 @@ class TestLogic(unittest.TestCase):
         )
 
     def test_invert_AND_or(self) -> None:
-        # ~(A & (B | C)
-        """FIXME we want
-
-           ~(A & (B | C))
-        == ~A | ~(B | C)
-        == ~A | (~B & ~C)
-
-        but it currently does
-
-           ~(A & (B | C)
-        == ~((A & B) | (A & C))
-        == ~(A & B) & ~(A & C)
-        == (~A | ~B) & (~A | ~C)
-        == (~A & ~A) | (~A & ~C) | (~B & ~A) | (~B & ~C)
-        """
-        # self.assertToList(
-        #     ~(A & (B | C)),
-        #     ~A | (~B & ~C),
-        # )
         self.assertEqual(
-            (~(A & (B | C))).to_list(),
-            (~A & ~A).to_list()
-            + (~A & ~C).to_list()
-            + (~B & ~A).to_list()
-            + (~B & ~C).to_list(),
+            unjson(~(A & (B | C))),
+            unjson(~A | (~B & ~C)),
         )

@@ -3,16 +3,59 @@ import json
 import zlib
 from typing import Iterable, List, Tuple
 
-from .types import Blueprint, Entity, EntityNumber, Root, WireConnectorID
+from sympy import Integer
+from sympy.core.relational import Eq, Ne, Lt, Le, Gt, Ge, Rel
+from sympy.logic.boolalg import And, Not, Or, to_dnf
+
+from .types import Blueprint, Entity, EntityNumber, Signal, Root, WireConnectorID
 
 
 def json_dumps(o, compact: bool = True) -> str:
     def default(o):
-        try:
-            to_list = getattr(o, "to_list")
-        except AttributeError:
-            raise TypeError
-        return to_list()
+        if isinstance(o, Signal):
+            return o.json
+        elif isinstance(o, Rel):
+            try:
+                op = {
+                    Eq: "=",
+                    Ne: "≠",
+                    Lt: "<",
+                    Le: "≤",
+                    Gt: ">",
+                    Ge: "≥",
+                }[o.func]
+            except KeyError:
+                # TODO
+                raise
+            assert len(o.args) == 2
+            assert isinstance(o.args[0], Signal)
+            assert isinstance(o.args[1], (Signal, Integer))
+            condition = {
+                "first_signal": default(o.args[0]),
+                "comparator": op,
+            }
+            if isinstance(o.args[1], Integer):
+                condition["constant"] = int(o.args[1])
+            else:
+                condition["second_signal"] = default(o.args[1])
+            return [condition]
+        elif isinstance(o, (And, Not, Or)):
+            dnf = to_dnf(o, simplify=False)
+            if isinstance(dnf, Not):
+                raise NotImplementedError("unexpected {o!r} in disjunctive normal form")
+            conditions = []
+            for conj in dnf.args if isinstance(dnf, Or) else (dnf,):
+                first = True
+                for term in conj.args if isinstance(conj, And) else (conj,):
+                    condition = default(term)
+                    if first:
+                        first = False
+                    else:
+                        condition[0]["compare_type"] = "and"
+                    conditions.extend(condition)
+            return conditions
+        else:
+            raise TypeError(f"cannot JSON serialize {type(o)!r}: {o!r}")
 
     return json.dumps(
         o,

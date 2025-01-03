@@ -1,16 +1,13 @@
-import json
 import re
-from typing import Callable, List, Optional, TextIO, Tuple
+from typing import Callable, Iterator, List, Optional, TextIO, Tuple, Union
+
+from sympy.core.relational import Rel
+from sympy.logic.boolalg import And, Not, Or, to_dnf
 
 from . import json_dumps
-from .logic import Conjunction, Disjunction
-from .types import (
-    Condition,
-    ControlBehavior,
-    DeciderCombinator,
-    DeciderConditions,
-    DeciderOutput,
-)
+from .types import DeciderCombinator, DeciderConditions, DeciderOutput
+
+Expr = Union[And, Not, Or, Rel]
 
 
 def html_escape(s: str) -> str:
@@ -47,59 +44,70 @@ def md_pre(
     return "\n\n```" + (lang or "") + "\n" + content + "\n```\n\n"
 
 
+def iter_expr(e: Expr) -> Iterator[Rel]:
+    if isinstance(e, Rel):
+        yield e
+    else:
+        for e2 in e.args:
+            yield from iter_expr(e2)
+
+
 class DeciderTable(object):
     """Create a list of configured decider combinators and an accompanying
     truth table."""
 
     conditions: List[str]
-    combinators: List[Tuple[List[DeciderOutput], Condition]]
+    combinators: List[Tuple[List[DeciderOutput], Expr]]
 
-    def __init__(self, *conditions: Condition) -> None:
+    def __init__(self, *conditions: Expr) -> None:
         self.conditions = []
         self.combinators = []
         for condition in conditions:
             self.add_condition(condition)
 
-    def add_condition(self, condition: Condition) -> int:
+    def add_condition(self, condition: Expr) -> int:
         """Add a condition to the table header."""
         added = 0
-        for cond in condition:
+        condition = to_dnf(condition, simplify=True, force=True)
+        for cond in iter_expr(condition):
             if (
-                json_dumps(cond.to_list()[0], compact=False) not in self.conditions
-                and json_dumps((~cond).to_list()[0], compact=False) not in self.conditions
+                json_dumps(cond, compact=False) not in self.conditions
+                and json_dumps(~cond, compact=False) not in self.conditions
             ):
-                self.conditions.append(json_dumps(cond.to_list()[0], compact=False))
+                self.conditions.append(json_dumps(cond, compact=False))
                 added += 1
         return added
 
     def add_combinator(
         self,
         outputs: List[DeciderOutput],
-        condition: Condition,
+        condition: Expr,
     ) -> None:
         """Add a new row to the table. If a condition and its inverse are both
         missing from the columns, they are automatically added."""
-        for cond in condition:
+        condition = to_dnf(condition, simplify=True, force=True)
+        for cond in iter_expr(condition):
             if (
-                json_dumps(cond.to_list()[0], compact=False) not in self.conditions
-                and json_dumps((~cond).to_list()[0], compact=False) not in self.conditions
+                json_dumps(cond, compact=False) not in self.conditions
+                and json_dumps(~cond, compact=False) not in self.conditions
             ):
-                self.conditions.append(json_dumps(cond.to_list()[0], compact=False))
+                self.conditions.append(json_dumps(cond, compact=False))
         self.combinators.append((outputs, condition))
 
-    def get_table_rows(self, disj: Condition) -> List[List[Tuple[str, str]]]:
+    def get_table_rows(self, disj: Expr) -> List[List[Tuple[str, str]]]:
         rows = []  # type: List[List[Tuple[str, str]]]
-        for conj in disj.parts if isinstance(disj, Disjunction) else [disj]:
-            assert isinstance(conj, Conjunction)
-            parts = conj.parts if isinstance(conj, Conjunction) else [conj]
+        disj = to_dnf(disj, simplify=True, force=True)
+        for conj in disj.args if isinstance(disj, Or) else [disj]:
+            assert isinstance(conj, And)
+            parts = conj.args if isinstance(conj, And) else [conj]
 
             cols = [("", "")] * len(self.conditions)  # type: List[Tuple[str, str]]
             for cond in parts:
-                x = json_dumps(cond.to_list()[0], compact=False)
+                x = json_dumps(cond, compact=False)
                 try:
                     i = self.conditions.index(x)
                 except ValueError:
-                    i = self.conditions.index(json_dumps((~cond).to_list()[0], compact=False))
+                    i = self.conditions.index(json_dumps(~cond, compact=False))
                     cols[i] = (
                         "text-align: center; background: salmon;",
                         "❌",
@@ -155,7 +163,9 @@ class DeciderTable(object):
                         '      <td style="text-align: left; %s" rowspan="%d">'
                         % (style, len(rows))
                     )
-                    fp.write(pre(json_dumps(signal, compact=False), "json", "margin: 0;"))
+                    fp.write(
+                        pre(json_dumps(signal, compact=False), "json", "margin: 0;")
+                    )
                     fp.write("</td>\n")
                     first = False
                 else:
@@ -189,12 +199,12 @@ class DeciderTable(object):
         return [
             DeciderCombinator(
                 name="decider-combinator",
-                control_behavior=ControlBehavior(
-                    decider_conditions=DeciderConditions(
+                control_behavior={
+                    "decider_conditions": DeciderConditions(
                         conditions=condition,
                         outputs=outputs,
                     )
-                ),
+                },
             )
             for outputs, condition in self.combinators
         ]

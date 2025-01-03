@@ -1,6 +1,12 @@
 from enum import IntEnum
 from decimal import Decimal
-from typing import Iterator, List, Literal, NewType, Tuple, TypedDict, Union
+from typing import List, Literal, NewType, Tuple, TypedDict, Union
+
+from sympy.logic.boolalg import And, Or
+
+# re-export
+from .core import Quality  # noqa: F401
+from .signal import Signal
 
 EntityNumber = NewType("EntityNumber", int)
 
@@ -52,50 +58,7 @@ class Root(TypedDict, total=True):
     blueprint: Blueprint
 
 
-class _Signal(TypedDict, total=True):
-    signal: str
-
-
-class Signal(_Signal, total=False):
-    type: str
-    # TODO red/green wires
-
-
 # Decider Combinator
-
-Comparator = Literal[
-    "=",
-    "≠",
-    "<",
-    ">",
-    "≤",
-    "≥",
-]
-
-
-class Condition(object):
-    """Base class of conditions used by the Decider Combinators."""
-
-    def __iter__(self) -> Iterator["Condition"]:
-        """Iterate over all simple conditions in a clause."""
-        ...
-
-    def __eq__(self, other) -> bool:
-        ...
-
-    def __invert__(self) -> "Condition":
-        ...
-
-    def __and__(self, other: "Condition") -> "Condition":
-        ...
-
-    def __or__(self, other: "Condition") -> "Condition":
-        ...
-
-    def to_list(self):
-        """Convert to a list of JSON conditions used by Factorio."""
-        ...
-
 
 class _DeciderOutput(TypedDict, total=True):
     signal: Signal
@@ -107,14 +70,12 @@ class DeciderOutput(_DeciderOutput, total=False):
 
 
 class DeciderConditions(TypedDict, total=True):
-    conditions: Condition
+    conditions: Union[And, Or]
     outputs: List[DeciderOutput]
 
 
-class ControlBehavior(TypedDict, total=True):
-    decider_conditions: DeciderConditions
-
-
 class DeciderCombinator(Entity, total=True):
-    # name: Literal["decider-combinator"]
-    control_behavior: ControlBehavior
+    name: Literal["decider-combinator"]
+    control_behavior: TypedDict(
+        "DeciderControlBehaviour", {"decider_conditions": DeciderConditions}, total=True
+    )
